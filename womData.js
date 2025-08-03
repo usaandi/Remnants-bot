@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 
 export async function fetchWOMData(data, batchSize = 20) {
 
+
     const API_URL = 'https://api.wiseoldman.net/v2';
 
     const endDate = new Date().toISOString();
