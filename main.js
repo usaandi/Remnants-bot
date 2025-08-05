@@ -1,6 +1,9 @@
 import {Client, GatewayIntentBits } from 'discord.js';
 
 import dotenv from 'dotenv';
+import { CONFIG } from './config-globals.js';
+import { parseMembers } from './wom-group.js';
+
 dotenv.config();
 const client = new Client({
   intents: [
@@ -11,21 +14,23 @@ const client = new Client({
   ]
 });
 
-const CHANNEL_ID = '1397129160148783188';
+const CHANNEL_ID = CONFIG.CHANNEL_ID;
 let channel; // Declare globally
 
+client.login(process.env.DISCORD_BOT_TOKEN);
+
 client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}!`);
 
   channel = client.channels.cache.get(CHANNEL_ID);
   if (!channel) {
     console.error('Channel not found!');
     return;
   }
+  console.log(Date.now());
   channel.send('Bot is now online!').catch(console.error);
+  parseMembers();
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
 
 // Listen for the process exit event
 process.on('exit', () => {

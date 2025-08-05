@@ -4,6 +4,8 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import { AttachmentBuilder } from 'discord.js';
 import { fileURLToPath } from 'node:url';
+import { CONFIG } from './config-globals.js';
+import { loadCache, saveCache} from './wom-cache.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,28 +15,34 @@ const __dirname = path.dirname(__filename);
 export async function fetchWOMData(data, batchSize = 20) {
 
 
-    const API_URL = 'https://api.wiseoldman.net/v2';
-
+    const API_URL = CONFIG.API_URL;
     const endDate = new Date().toISOString();
     const results = [];
+    const now = Date.now();
+    const cache = await loadCache();
     for (let i = 0; i < data.length; i+= batchSize) {
         const batch = data.slice(i, i + batchSize);
 
 
         const promises = batch.map(async (entry) => {
+            const cachedEntry = cache[entry.name];
 
+            //10 hour time
+            if(cachedEntry &&  (now - cachedEntry.fetchedAt < 36000000)) {
+                return cachedEntry.data;
+            }
             const username = encodeURIComponent(entry.name);
             const startDate = entry.date_joined_at;
             const params = new URLSearchParams({
-                startDate,
-                endDate
+                startDate: startDate,
+                endDate: endDate
             });
 
             const url = `${API_URL}/players/${username}/gained?${params.toString()}`;
 
         try {
-            const WOM_API_KEY = process.env.WOM_API_KEY;
-            const USER_AGENT = 'us_ai|discord_id: 1228569681355603981'
+            const WOM_API_KEY = process.env.WOM_API_KEY || '';
+            const USER_AGENT = CONFIG.USER_AGENT;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -63,8 +71,13 @@ export async function fetchWOMData(data, batchSize = 20) {
                 combined: Number(ehp) + Number(ehb)
             };
             
-            console.log()
-            console.log(`EHP data for ${entry.name}:`, result);
+            cache[entry.name] = {
+                fetchedAt: Date.now(),
+                data:result
+            };
+
+            saveCache(cache).catch(console.error);
+
             return result;
             }  catch (error) {
                     console.error(`Error fetching data for ${entry.name}:`, error);
@@ -74,6 +87,7 @@ export async function fetchWOMData(data, batchSize = 20) {
         const batchResult = await Promise.all(promises);
         results.push(...batchResult.filter(Boolean));
     }
+
     const filePath = await saveToCSV(results);
     await postCSVToDiscord(filePath);
     return results;
@@ -83,7 +97,7 @@ export async function fetchWOMData(data, batchSize = 20) {
 
 async function postToDiscord(data) {
 
-    const CHANNEL_ID = '1397129160148783188';
+    const CHANNEL_ID = CONFIG.CHANNEL_ID;
     const channel = await client.channels.fetch(CHANNEL_ID);
     if(!channel.isTextBased()) {
         console.error('Target channel is not a text-based channel');
@@ -122,6 +136,8 @@ async function postCSVToDiscord(filePath) {
     });
 
     console.log('CSV file posted to Discord');
+    client.destroy();
+    process.exit();
 }
 
 
